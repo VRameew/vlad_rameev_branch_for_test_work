@@ -67,6 +67,9 @@ class Data(Base):
     parent = Column(String)
     owner = Column(String(14))
 
+    def to_dict(self):
+        return {key: value for key, value in self.__dict__.items() if key != '_sa_instance_state'}
+
 
 class Documents(Base):
     __tablename__ = 'documents'
