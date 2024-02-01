@@ -2,8 +2,10 @@ from sql_connector import SQL_conn, Data, Documents
 from data_filler import make_data, make_documents
 from sqlalchemy import null
 import json
+from datetime import datetime
 
 base = SQL_conn()
+work_flag: bool = True #Для корректной работы цикла
 
 if base.create_tables():
     """Создание сессии для формирования данных"""
@@ -41,22 +43,26 @@ def doc_data():
     ).first()
     session.close()
     if data_document is None:
+        global work_flag
+        work_flag = False
         print("Нет документов для обработки")
-        raise SystemExit(1)
+        return False
 
     return data_document
 
 
 def decod_document_data(data_document):
+    """Получение данных из поля document_data и их преобразование из JSON"""
     try:
         decod_data = json.loads(data_document.document_data)
         return decod_data
     except Exception as e:
         print("Ошибка чтения данных документа: ", e)
-        raise SystemExit(1)
+        return False
 
 
 def objects_data(decod_data):
+    """Получение всех данных объектов по расшифрованным данным decod_document_data"""
     objects_data_full = []
     try:
         objects_data = decod_data.get('objects')
@@ -72,38 +78,45 @@ def objects_data(decod_data):
         return objects_data_full
     except Exception as e:
         print("Ошибка при чтении данных объектов:", e)
-        raise SystemExit(1)
+        return False
 
 
 def load_objects():
-    data_for_objects = decod_document_data(doc_data())
-    objects = objects_data(data_for_objects)
+    """Обработка данных по обьектам что были найдены
+    сверка значений и их обработка"""
+    document = doc_data() #получение документа
+    data_for_objects = decod_document_data(document) #получение данных из документа
+    objects = objects_data(data_for_objects) # разбиение на обьекты для обработки
     session = base.get_session()
 
     if not objects:
         print("Нет данных объектов для обработки")
-        raise SystemExit(1)
+        return False
 
     try:
-        print("START OBJ!!!!!!!!!!!!!")
         for obj in objects:
-            print("=====OBJ!!!!!!!!!!!!!")
-            object_data = Data(**obj)
+            object_data = Data(**obj)  # создание обектов типа Data для работы в SQLalchemy
             operation_details = obj.get("operation_details")
             if operation_details:
-                for field, values in operation_details.items():
+                for field, values in operation_details.items(): # Обработка поля operation_details
                     old_value = values.get("old")
                     new_value = values.get("new")
                     if old_value and getattr(object_data, field) == old_value:
                         setattr(object_data, field, new_value)
-
             session.merge(object_data)
 
+        document.processed_at = datetime.now() # Указание что документ обработан
+        session.merge(document)
         session.commit()
         session.close()
+        return True
 
     except Exception as e:
         print("Ошибка при обработке данных объектов:", e)
-        raise SystemExit(1)
+        return False
 
-load_objects()
+
+while work_flag:
+    load_objects()
+print("Обработка обьектов завершена! ")
+

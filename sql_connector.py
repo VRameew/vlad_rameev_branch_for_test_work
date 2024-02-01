@@ -7,8 +7,8 @@ Base = declarative_base()
 
 
 class SQL_conn():
+    """Класс для инициализации подключения, создании сесий и таблиц в базе"""
     def __init__(self):
-        print("__INIT__!!!!!!!!!")
         self.engine = create_engine("postgresql+psycopg2://user:password@postgres:5432/db",
                                echo=True, pool_pre_ping=True)
         print(self.engine)
@@ -22,7 +22,6 @@ class SQL_conn():
         return session
 
     def create_tables(self):
-        print("Создание")
         sql_data = '''
         CREATE TABLE IF NOT EXISTS public.data
         (
@@ -46,15 +45,13 @@ class SQL_conn():
             CONSTRAINT documents_pkey PRIMARY KEY (doc_id)
         )
         '''
-        print("создание Начало")
+
         with self.engine.connect() as eng:
             eng.execute(text(sql_data))
             eng.execute(text(sql_documents))
-            print("создание завершено")
             eng.commit()
             eng.close()
             return True
-
         return False
 
 
@@ -79,3 +76,6 @@ class Documents(Base):
     document_type = Column(String)
     document_data = Column(JSON)
     processed_at = Column(DateTime)
+
+    def to_dict(self):
+        return {key: value for key, value in self.__dict__.items() if key != '_sa_instance_state'}
